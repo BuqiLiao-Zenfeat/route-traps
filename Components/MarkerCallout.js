@@ -27,7 +27,8 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    width: 200,
+    minWidth: 200,
+    maxWidth: 300,
     padding: 5,
   },
   calloutTitle: {

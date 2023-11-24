@@ -1,15 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, View, Alert, TouchableOpacity, Dimensions } from 'react-native';
+import { StyleSheet, View, Text, Alert, TouchableOpacity, Dimensions } from 'react-native';
 import { Icon } from '@rneui/themed';
 import * as Location from 'expo-location';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps'
+import MapView, { Marker, MarkerAnimated, PROVIDER_GOOGLE } from 'react-native-maps'
 import MapViewDirections from 'react-native-maps-directions';
+import { getDistance } from 'geolib';
 
 import { getAddressFromLatLng } from '../Utils/locationUtils';
 
 import BottomPanel from '../Components/BottomPanel';
+import TopPanel from '../Components/TopPanel';
 import MarkerCallout from '../Components/MarkerCallout';
 import SearchBarButton from '../Components/SearchBarButton';
+import Divider from '../Components/Divider';
 
 import {
   LATITUDE_DELTA, LONGITUDE_DELTA,
@@ -23,23 +26,31 @@ const { width, height } = Dimensions.get('window');
 
 export default function MapScreen({ route, navigation }){
   const mapViewRef = useRef(null);
+  const { startLocation, startAddress, endLocation, endAddress } = route?.params || {};
 
+  const [userLocation, setUserLocation] = useState(null);
   const [initialLocation, setInitialLocation] = useState(null); 
   const [initialAddress, setInitialAddress] = useState(null);
   const [destination, setDestination] = useState(null);
   const [destinationAddress, setDestinationAddress] = useState(null);
 
   const [trapPoints, setTrapPoints] = useState([]);
-  const { startLocation, startAddress, endLocation, endAddress } = route?.params || {};
+  const [distance, setDistance] = useState(null);
+  const [duration, setDuration] = useState(null);
+
 
   useEffect(() => {
     if (startLocation && startAddress) {
+      console.log('startLocation and startAddress are set');
+      console.log(startLocation, startAddress);
       setInitialLocation(startLocation);
       setInitialAddress(startAddress);
     }
   }, [startLocation, startAddress]);
   useEffect(() => {
     if (endLocation && endAddress) {
+      console.log('endLocation and endAddress are set');
+      console.log(endLocation, endAddress);
       setDestination(endLocation);
       setDestinationAddress(endAddress);
     }
@@ -59,6 +70,7 @@ export default function MapScreen({ route, navigation }){
       }
       const location = await Location.getCurrentPositionAsync({});
       const { latitude, longitude } = location.coords;
+      setUserLocation({ latitude, longitude });
       setInitialLocation({ latitude, longitude });
       const address = await getAddressFromLatLng(latitude, longitude);
       setInitialAddress(address);
@@ -92,7 +104,8 @@ export default function MapScreen({ route, navigation }){
         style={{...StyleSheet.absoluteFillObject}}
       >
         {initialLocation && (
-          <Marker
+          <MarkerAnimated
+            key={0}
             coordinate={initialLocation}
             title={initialAddress}
             description="Starting point"
@@ -100,7 +113,8 @@ export default function MapScreen({ route, navigation }){
           />
         )}
         {destination && (
-          <Marker
+          <MarkerAnimated
+            key={1}
             coordinate={destination}
             title={destinationAddress}
             description="Destination"
@@ -109,15 +123,20 @@ export default function MapScreen({ route, navigation }){
         )}
         {trapPoints.map((trapPoint, index) => (
           <Marker
-            key={index}
+            key={index+2}
             coordinate={trapPoint.location}
             anchor={{ x: 0.5, y: 0.5 }}
             onPress={() => handleMarkerPress(trapPoint.location)}
           >
-            <Icon type='material-community' name="circle" size={TRAP_POINT_MARKER_SIZE} color={TRAP_POINT_MARKER_COLOR} />
+            <Icon 
+              type='material-community' 
+              name="circle"
+              size={TRAP_POINT_MARKER_SIZE} 
+              color={TRAP_POINT_MARKER_COLOR} 
+            />
             <MarkerCallout
               title={trapPoint.maneuver}
-              description={trapPoint.instruction}
+              description={trapPoint.instruction+' ('+trapPoint.distanceFromStart+' m)'}
             />
           </Marker>
         ))}
@@ -127,9 +146,8 @@ export default function MapScreen({ route, navigation }){
           apikey={process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}
           strokeWidth={POLYLINE_WIDTH}
           strokeColor={POLYLINE_COLOR}
-          onStart={(params) => {
-            console.log(params);
-            console.log(`Started routing between "${params.origin}" and "${params.destination}"`);
+          onStart={(params) => { 
+            setTrapPoints([]);
           }}
           onReady={result => {
             result.legs[0].steps.forEach(step => {
@@ -141,32 +159,47 @@ export default function MapScreen({ route, navigation }){
                 },
                 maneuver: step.maneuver,
                 instruction: step.html_instructions,
+                distanceFromStart: getDistance(initialLocation, step.start_location)
               };
               setTrapPoints(prevState => [...prevState, trapPoint]);
             });
-            console.log(`Distance: ${result.distance} km`)
-            console.log(`Duration: ${result.duration} min.`)
+            setDistance(result.distance);
+            setDuration(result.duration);
 
             mapViewRef.current?.fitToCoordinates(result.coordinates, {
               edgePadding: {
                 right: (width / 10),
-                bottom: (height / 10),
+                bottom: (height / 3),
                 left: (width / 10),
-                top: (height / 10),
+                top: (height / 3),
               },
             });
           }}
-          onError={(errorMessage) => {
-            console.error(errorMessage);
-          }}
+          onError={(errorMessage) => { console.log(errorMessage) }}
         />
       </MapView>
+      {distance && duration && (
+        <TopPanel>
+          <View style={styles.detailsGroupContainer}>
+            <View style={styles.detailsContainer}>
+              <Icon type='material' name="directions" size={24} color="black" />
+              <Text style={styles.detailsText}>{distance} km</Text>
+            </View>
+            <Divider type='vertical' />
+            <View style={styles.detailsContainer}>
+              <Icon type='material' name="timer" size={24} color="black" />
+              <Text style={styles.detailsText}>{duration.toFixed(2)} min</Text>
+            </View>
+          </View>
+        </TopPanel>
+      )}
       <BottomPanel>
         <View style={styles.searchBarGroupContainer}>
           <SearchBarButton
             buttonText={initialAddress || 'Choose starting point'}
             onPress={() => navigation.navigate('Location Search',{ 
               type: 'start',
+              userLocation,
               promptedAddress: initialAddress,
             })}
             leftIcon={<Icon type='octicon' name="dot-fill" size={24} color="#06D028" />}
@@ -176,11 +209,12 @@ export default function MapScreen({ route, navigation }){
               </TouchableOpacity>
             }
           />
-          <View style={styles.divider} />
+          <Divider type='horizontal' />
           <SearchBarButton
             buttonText={destinationAddress || 'Choose destination'}
             onPress={() => navigation.navigate('Location Search',{
               type : 'end',
+              userLocation,
               promptedAddress: destinationAddress,
             })}
             leftIcon={<Icon type='octicon' name={destination ? "dot-fill" : "dot"} size={24} color="#F3250E" />}
@@ -194,6 +228,26 @@ export default function MapScreen({ route, navigation }){
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  detailsGroupContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 15,
+  },
+  detailsContainer: {
+    flex: 1,
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 10,
+  },
+  detailsText: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    marginTop: 5,
   },
   searchBarGroupContainer: {
     alignItems: 'center',

@@ -1,11 +1,14 @@
 import React, { useEffect, useRef } from 'react';
-import { StyleSheet, View, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, Alert } from 'react-native';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
+import * as Location from 'expo-location';
 import { Icon } from '@rneui/themed';
+
+import { getAddressFromLatLng } from '../Utils/locationUtils';
 
 
 export default function LocationSearchScreen({ route, navigation}) {
-  const { type, promptedAddress } = route.params;
+  const { type, userLocation, promptedAddress } = route.params;
   const searchInputRef = useRef(null);
 
   useEffect(() => {
@@ -13,6 +16,22 @@ export default function LocationSearchScreen({ route, navigation}) {
       searchInputRef.current?.setAddressText(promptedAddress);
     }
   }, [promptedAddress]);
+
+  const fetchUserLocation = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission to access location was denied');
+        return;
+      }
+      const location = await Location.getCurrentPositionAsync({});
+      const { latitude, longitude } = location.coords;
+      const address = await getAddressFromLatLng(latitude, longitude);
+      searchInputRef.current?.setAddressText(address);
+    } catch (error) {
+      console.log(error);
+    }
+  }
 
   const handleLocationSelect = (data, details) => {
     const selectedLocation = {
@@ -52,6 +71,8 @@ export default function LocationSearchScreen({ route, navigation}) {
           query={{
             key: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
             language: "en",
+            location: `${userLocation.latitude},${userLocation.longitude}`,
+            radius: 20000,
           }}
           styles={{
             container: styles.searchContainer,
@@ -69,7 +90,7 @@ export default function LocationSearchScreen({ route, navigation}) {
           )}
           renderRightButton={() => (
             type === "start" && (
-              <TouchableOpacity>
+              <TouchableOpacity onPress={fetchUserLocation}>
                 <Icon type='material' name="my-location" size={24} color="black" />
               </TouchableOpacity>
             )

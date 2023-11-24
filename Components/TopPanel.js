@@ -3,11 +3,11 @@ import { View, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 
-export default function BottomPanel({ children }) {
+export default function TopPanel({ children }) {
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.container, { marginBottom: insets.bottom }]}>
+    <View style={[styles.container, { marginTop: insets.top }]}>
       {children}
     </View>
   )
@@ -16,7 +16,7 @@ export default function BottomPanel({ children }) {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: 0,
+    top: 0,
     width: '100%',
     padding: 20,
   },

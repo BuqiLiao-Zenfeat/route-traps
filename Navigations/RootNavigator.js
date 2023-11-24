@@ -9,7 +9,7 @@ const Stack = createNativeStackNavigator();
 export default function RootNavigator() {
   return (
     <Stack.Navigator>
-      <Stack.Screen name="Map" component={MapScreen} />
+      <Stack.Screen name="Map" component={MapScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Location Search" component={LocationSearchScreen} />
     </Stack.Navigator>
   );
